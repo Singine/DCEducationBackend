@@ -154,8 +154,8 @@
 }
 @font-face {
     font-family: 'AliPuHuiTi';
-    src: url('../fonts/AlibabaPuHuiTi-3-55-Medium.woff') format('woff'),
-         url('../fonts/AlibabaPuHuiTi-3-55-Medium.woff2') format('woff2');
+    src: url('../fonts/AlibabaPuHuiTi-3-65-Medium.woff') format('woff'),
+         url('../fonts/AlibabaPuHuiTi-3-65-Medium.woff2') format('woff2');
     font-weight: 400;   /* 正常体 */
     font-style: normal;
     font-display: swap; /* 强烈推荐加这行！文字先显示，字体加载完再替换 */
@@ -35861,7 +35861,7 @@ body[class="ltr dark"] .team-chat-container {
 }
 
 .box-layout {
-  background-image: url(2d11e0ba2aa5bcc636ed.jpg);
+  background-image: url(../images/bg/bg-1.jpg);
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center;
@@ -42320,4 +42320,34 @@ select#model {
   .rtl .footer-text {
     text-align: right;
   }
+}
+
+
+@media screen and (min-width: 992px) {
+      .modal-dialog {
+      position: relative;
+      width: auto;
+      margin: 1.75rem;
+      pointer-events: none;
+      margin-right: auto;
+      margin-left: auto;
+    }
+
+.modal-fullscreen-lg-down {
+    max-width: none !important;
+    width: 992px !important;
+    height: 95% !important;
+  }
+  .modal-fullscreen-lg-down .modal-content {
+    height: 95% !important;
+  }
+  .modal-fullscreen-lg-down .modal-body {
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    margin:15px;
+  }
+}
+
+.select2-container{
+   z-index:9999;
 }

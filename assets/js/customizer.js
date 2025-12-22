@@ -1,15 +1,15 @@
 $(function() {
-  //  **------Load customizer**
-  $.get("../assets/customizer.txt", function(html_string)
-  {
-    let customizer = $("#customizer");
-    if (customizer.length >0){
-      customizer.html(html_string);
-    }
-  },'html');
-  setTimeout(()=>{
-    loadConfiguration();
-  },1000);
+  // //  **------Load customizer**
+  // $.get("../assets/customizer.txt", function(html_string)
+  // {
+  //   let customizer = $("#customizer");
+  //   if (customizer.length >0){
+  //     customizer.html(html_string);
+  //   }
+  // },'html');
+  // setTimeout(()=>{
+  //   loadConfiguration();
+  // },1000);
 });
 
 $(document).on("click",".sidebar-option > li", function () {
