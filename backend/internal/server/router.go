@@ -9,6 +9,8 @@ import (
 	"backend/internal/modules/universities"
 	"backend/internal/modules/users"
 	"backend/internal/modules/auth"
+	"backend/internal/modules/countries"
+
 )
 
 func NewRouter(cfg config.Config, db *sqlx.DB) *gin.Engine {
@@ -51,6 +53,17 @@ func NewRouter(cfg config.Config, db *sqlx.DB) *gin.Engine {
 
 
 	}
+
+	// countries module wiring
+	cRepo := countries.NewRepo(db)
+	cSvc := countries.NewService(cRepo)
+	cHandler := countries.NewHandler(cSvc)
+
+	cg := v1.Group("/countries")
+	{
+		cg.GET("/options", cHandler.Options)
+	}
+
 
 		// users module wiring
 	userRepo := users.NewRepo(db)

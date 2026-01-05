@@ -23,6 +23,7 @@ type SearchParams struct {
 	Size        int
 }
 
+
 func (r *Repo) Search(ctx context.Context, p SearchParams) ([]University, int, error) {
 	// pagination defaults
 	if p.Page <= 0 {
@@ -114,10 +115,12 @@ ORDER BY name_cn
 }
 
 
+
 type OptionsCNParams struct {
-	Q    string
-	Page int
-	Size int
+    Q         string
+    CountryID uint64
+    Page      int
+    Size      int
 }
 
 func (r *Repo) OptionsCN(ctx context.Context, p OptionsCNParams) ([]UniversityOptionCNDTO, int, error) {
@@ -132,11 +135,15 @@ func (r *Repo) OptionsCN(ctx context.Context, p OptionsCNParams) ([]UniversityOp
 	where := "name_cn IS NOT NULL AND name_cn <> ''"
 	args := map[string]interface{}{}
 
+	if p.CountryID != 0 {
+		where += " AND country_id = :country_id"
+		args["country_id"] = p.CountryID
+	}
+
 	if strings.TrimSpace(p.Q) != "" {
 		where += " AND name_cn LIKE :q"
 		args["q"] = "%" + strings.TrimSpace(p.Q) + "%"
 	}
-
 	// total
 	countSQL := "SELECT COUNT(*) FROM universities WHERE " + where
 	countStmt, err := r.db.PrepareNamedContext(ctx, countSQL)

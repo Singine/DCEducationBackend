@@ -97,6 +97,17 @@ func (h *Handler) ListAllNameCN(c *gin.Context) {
 
 func (h *Handler) OptionsCN(c *gin.Context) {
 	q := c.Query("q")
+    countryIDStr := c.Query("country_id")
+    var countryID uint64
+    if countryIDStr != "" {
+        id, err := strconv.ParseUint(countryIDStr, 10, 64)
+        if err != nil {
+            response.BadRequest(c, "invalid country_id")
+            return
+        }
+        countryID = id
+    }
+	
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
 
