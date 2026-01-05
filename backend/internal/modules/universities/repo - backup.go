@@ -23,6 +23,7 @@ type SearchParams struct {
 	Size        int
 }
 
+
 func (r *Repo) Search(ctx context.Context, p SearchParams) ([]University, int, error) {
 	// pagination defaults
 	if p.Page <= 0 {
@@ -98,6 +99,7 @@ LIMIT 1
 	return &u, nil
 }
 
+
 func (r *Repo) ListAllNameCN(ctx context.Context) ([]string, error) {
 	var names []string
 	err := r.db.SelectContext(ctx, &names, `
@@ -112,11 +114,13 @@ ORDER BY name_cn
 	return names, nil
 }
 
+
+
 type OptionsCNParams struct {
-	Q         string
-	CountryID uint64
-	Page      int
-	Size      int
+    Q         string
+    CountryID uint64
+    Page      int
+    Size      int
 }
 
 func (r *Repo) OptionsCN(ctx context.Context, p OptionsCNParams) ([]UniversityOptionCNDTO, int, error) {
@@ -136,11 +140,10 @@ func (r *Repo) OptionsCN(ctx context.Context, p OptionsCNParams) ([]UniversityOp
 		args["country_id"] = p.CountryID
 	}
 
-	if q := strings.TrimSpace(p.Q); q != "" {
+	if strings.TrimSpace(p.Q) != "" {
 		where += " AND name_cn LIKE :q"
-		args["q"] = "%" + q + "%"
+		args["q"] = "%" + strings.TrimSpace(p.Q) + "%"
 	}
-
 	// total
 	countSQL := "SELECT COUNT(*) FROM universities WHERE " + where
 	countStmt, err := r.db.PrepareNamedContext(ctx, countSQL)
@@ -156,12 +159,12 @@ func (r *Repo) OptionsCN(ctx context.Context, p OptionsCNParams) ([]UniversityOp
 
 	// list
 	listSQL := fmt.Sprintf(`
-SELECT id, name_cn
-FROM universities
-WHERE %s
-ORDER BY name_cn
-LIMIT %d OFFSET %d
-`, where, p.Size, offset)
+	SELECT id, name_cn
+	FROM universities
+	WHERE %s
+	ORDER BY name_cn
+	LIMIT %d OFFSET %d
+	`, where, p.Size, offset)
 
 	listStmt, err := r.db.PrepareNamedContext(ctx, listSQL)
 	if err != nil {
