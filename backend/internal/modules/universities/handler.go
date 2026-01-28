@@ -3,6 +3,7 @@ package universities
 import (
 	"database/sql"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -18,7 +19,7 @@ func NewHandler(svc *Service) *Handler {
 }
 
 func (h *Handler) Search(c *gin.Context) {
-	countryCode := c.Query("country_code")
+	countryCode := normalizeCountryCode(c.Query("country_code"))
 	q := c.Query("q")
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -56,6 +57,44 @@ func (h *Handler) Search(c *gin.Context) {
 	})
 }
 
+func (h *Handler) SearchPost(c *gin.Context) {
+	var req UniversitySearchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid json body")
+		return
+	}
+
+	req.CountryCode = normalizeCountryCode(req.CountryCode)
+	page := req.Page
+	size := req.Size
+
+	items, total, err := h.svc.Search(c.Request.Context(), SearchParams{
+		CountryCode: req.CountryCode,
+		Q:           req.Q,
+		Page:        page,
+		Size:        size,
+	})
+	if err != nil {
+		response.ServerError(c, err.Error())
+		return
+	}
+
+	dtoItems := make([]UniversityOptionCNDTO, 0, len(items))
+	for _, u := range items {
+		dtoItems = append(dtoItems, UniversityOptionCNDTO{
+			ID:     u.ID,
+			NameCN: u.NameCN,
+		})
+	}
+
+	response.OK(c, PagedResult[UniversityOptionCNDTO]{
+		Page:  page,
+		Size:  size,
+		Total: total,
+		Items: dtoItems,
+	})
+}
+
 func (h *Handler) GetByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id64, err := strconv.ParseUint(idStr, 10, 64)
@@ -84,6 +123,11 @@ func (h *Handler) GetByID(c *gin.Context) {
 		"name_cn":       u.NameCN,
 		"domains_json":  u.DomainsJSON,
 	})
+}
+
+func normalizeCountryCode(code string) string {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	return code
 }
 
 func (h *Handler) ListAllNameCN(c *gin.Context) {

@@ -1,3 +1,7 @@
 $(function() {
-    $('.select-basic-multiple-four').select2();
+    $('.select-basic-multiple-four').each(function () {
+        const $el = $(this);
+        if ($el.data('select2')) return;
+        $el.select2();
+    });
 });

@@ -11451,7 +11451,7 @@ nav {
   border-bottom-right-radius: 25px;
 }
 nav .app-logo {
-  padding: 1.5rem 1.5rem 0 1.5rem;
+  padding: 1.5rem;
 }
 nav .app-logo .logo img {
   width: 140px;
@@ -27985,6 +27985,14 @@ input[type=range]::-webkit-slider-thumb {
 
 .select2-dropdown {
   background-color: var(--white) !important;
+  z-index: 20000 !important;
+}
+
+/* Allow interactions inside modals on large screens */
+@media screen and (min-width: 992px) {
+  .modal.show .modal-dialog {
+    pointer-events: auto;
+  }
 }
 
 .app-form .select2-container--default {
@@ -42359,4 +42367,33 @@ select#model {
 .tags-setting-switch input{
   height: 25px!important;
   width: 40px!important;
+}
+/* Page fade transition */
+body.page-fade {
+  opacity: 0;
+  transition: opacity 0.18s ease-in-out;
+}
+
+body.page-fade.page-loaded {
+  opacity: 1;
+}
+
+body.page-fade.page-leave {
+  opacity: 0;
+}
+/* Fix modal interactions to allow dropdown selection */
+@media screen and (min-width: 992px) {
+  .modal-dialog {
+    pointer-events: auto;
+  }
+  .modal.show .modal-dialog {
+    pointer-events: auto;
+  }
+}
+/* Ensure select2 results are clickable */
+.select2-dropdown,
+.select2-results,
+.select2-results__option {
+  pointer-events: auto !important;
+  z-index: 30000 !important;
 }

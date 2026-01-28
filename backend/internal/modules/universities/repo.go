@@ -37,8 +37,23 @@ func (r *Repo) Search(ctx context.Context, p SearchParams) ([]University, int, e
 	args := map[string]interface{}{}
 
 	if p.CountryCode != "" {
-		where = append(where, "country_code = :country_code")
-		args["country_code"] = strings.ToUpper(strings.TrimSpace(p.CountryCode))
+		code := strings.ToUpper(strings.TrimSpace(p.CountryCode))
+		if strings.Contains(code, ",") {
+			parts := []string{}
+			for _, item := range strings.Split(code, ",") {
+				c := strings.ToUpper(strings.TrimSpace(item))
+				if c != "" {
+					parts = append(parts, c)
+				}
+			}
+			if len(parts) > 0 {
+				where = append(where, "country_code IN (:country_codes)")
+				args["country_codes"] = parts
+			}
+		} else {
+			where = append(where, "country_code = :country_code")
+			args["country_code"] = code
+		}
 	}
 	if q := strings.TrimSpace(p.Q); q != "" {
 		// 简单关键词：搜中英文名和简称
@@ -50,14 +65,24 @@ func (r *Repo) Search(ctx context.Context, p SearchParams) ([]University, int, e
 
 	// total
 	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM universities WHERE %s", whereSQL)
-	countStmt, err := r.db.PrepareNamedContext(ctx, countSQL)
+	namedCountSQL, namedCountArgs, err := sqlx.Named(countSQL, args)
+	if err != nil {
+		return nil, 0, err
+	}
+	inCountSQL, inCountArgs, err := sqlx.In(namedCountSQL, namedCountArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	inCountSQL = r.db.Rebind(inCountSQL)
+
+	countStmt, err := r.db.PreparexContext(ctx, inCountSQL)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer countStmt.Close()
 
 	var total int
-	if err := countStmt.GetContext(ctx, &total, args); err != nil {
+	if err := countStmt.GetContext(ctx, &total, inCountArgs...); err != nil {
 		return nil, 0, err
 	}
 
@@ -70,14 +95,24 @@ ORDER BY country_code, name_en
 LIMIT %d OFFSET %d
 `, whereSQL, p.Size, offset)
 
-	listStmt, err := r.db.PrepareNamedContext(ctx, listSQL)
+	namedListSQL, namedListArgs, err := sqlx.Named(listSQL, args)
+	if err != nil {
+		return nil, 0, err
+	}
+	inListSQL, inListArgs, err := sqlx.In(namedListSQL, namedListArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	inListSQL = r.db.Rebind(inListSQL)
+
+	listStmt, err := r.db.PreparexContext(ctx, inListSQL)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer listStmt.Close()
 
 	var items []University
-	if err := listStmt.SelectContext(ctx, &items, args); err != nil {
+	if err := listStmt.SelectContext(ctx, &items, inListArgs...); err != nil {
 		return nil, 0, err
 	}
 

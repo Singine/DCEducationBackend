@@ -2,6 +2,7 @@
 
 // ====== 可按需改：token 存储 key ======
 const TOKEN_KEY = "dc_token";
+const USER_KEY = "dc_user";
 const REMEMBER_KEY = "dc_remember_identifier";
 
 // ====== 统一解析后端错误信息（沿用你 httprequest.js 的风格）=====
@@ -66,7 +67,15 @@ async function submitLogin() {
     const data = await resp.json().catch(() => null);
 
     if (!resp.ok) {
-      $("#loginError").text(extractApiError(data, resp));
+      if (resp.status === 401) {
+        $("#loginError").text("用户名或密码错误，请重试。");
+      } else if (resp.status === 403) {
+        $("#loginError").text("账号已被禁用，请联系管理员。");
+      } else if (resp.status === 423) {
+        $("#loginError").text("账号已被锁定，请稍后再试。");
+      } else {
+        $("#loginError").text(extractApiError(data, resp));
+      }
       return;
     }
 
@@ -81,6 +90,13 @@ async function submitLogin() {
 
     // 存 token
     localStorage.setItem(TOKEN_KEY, token);
+    if (payload?.user) {
+      try {
+        localStorage.setItem(USER_KEY, JSON.stringify(payload.user));
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
 
     // 记住账号
     if ($("#rememberMe").is(":checked")) {
@@ -90,7 +106,7 @@ async function submitLogin() {
     }
 
     // 跳转首页（按你实际页面改）
-    window.location.href = "./index.html";
+    window.location.href = "./dashboard_index.html";
   } catch (e) {
     $("#loginError").text("网络错误或服务器不可达");
   } finally {

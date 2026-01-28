@@ -10,6 +10,7 @@ import (
 	"backend/internal/modules/users"
 	"backend/internal/modules/auth"
 	"backend/internal/modules/countries"
+	"backend/internal/modules/programs"
 
 )
 
@@ -47,6 +48,7 @@ func NewRouter(cfg config.Config, db *sqlx.DB) *gin.Engine {
 	ug := v1.Group("/universities")
 	{
 		ug.GET("", uHandler.Search)     // list search
+		ug.POST("/search", uHandler.SearchPost)
 		ug.GET("/:id", uHandler.GetByID) // detail
 		ug.GET("/u-name-cn", uHandler.ListAllNameCN)
 		ug.GET("/options-u-name-cn", uHandler.OptionsCN)
@@ -62,6 +64,16 @@ func NewRouter(cfg config.Config, db *sqlx.DB) *gin.Engine {
 	cg := v1.Group("/countries")
 	{
 		cg.GET("/options", cHandler.Options)
+	}
+
+	// programs module wiring
+	pRepo := programs.NewRepo(db)
+	pSvc := programs.NewService(pRepo)
+	pHandler := programs.NewHandler(pSvc)
+
+	pg := v1.Group("/programs")
+	{
+		pg.POST("/search", pHandler.SearchPost)
 	}
 
 

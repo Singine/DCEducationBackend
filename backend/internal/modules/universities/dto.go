@@ -19,3 +19,10 @@ type UniversityOptionCNDTO struct {
 	ID     uint64 `db:"id" json:"id"`
 	NameCN string `db:"name_cn" json:"name_cn"`
 }
+
+type UniversitySearchRequest struct {
+	CountryCode string `json:"country_code"`
+	Q           string `json:"q"`
+	Page        int    `json:"page"`
+	Size        int    `json:"size"`
+}

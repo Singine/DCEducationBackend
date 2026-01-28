@@ -3,16 +3,148 @@ import { matchBachelorPrograms } from "./calc/matchBachelor.js";
 // ------------------ bachelor start ------------------
 
 $(function () {
-  // 初始化多选下拉框（目标院校和目标专业）
-  $("#select_bachelor_to_school").select2({
-    placeholder: "请选择目标院校（可多选）",
+  // 初始化多选下拉框（目标院校和目标专业�?
+    const $bachelorSchool = $("#select_bachelor_to_school");
+  const $bachelorMajor = $("#select_bachelor_to_major");
+
+  if ($bachelorSchool.data("select2")) {
+    $bachelorSchool.select2("destroy");
+  }
+  if ($bachelorMajor.data("select2")) {
+    $bachelorMajor.select2("destroy");
+  }
+
+  $bachelorSchool.select2({
+    placeholder: "????????????",
     allowClear: true,
+    dropdownParent: $(document.body),
+    minimumInputLength: 1,
+    ajax: {
+      delay: 300,
+      transport: function (params, success, failure) {
+        const countryCodes = getSelectedBachelorCountryCodes();
+        if (!countryCodes.length) {
+          success({ data: { items: [], total: 0 } });
+          return;
+        }
+        const payload = params.data || {};
+        return $.ajax({
+          url: "/api/v1/universities/search",
+          method: "POST",
+          contentType: "application/json",
+          dataType: "json",
+          data: JSON.stringify(payload),
+        }).then(success).fail(failure);
+      },
+      url: function () {
+        return "/api/v1/universities/search";
+      },
+      dataType: "json",
+      data: function (params) {
+        const countryCodes = getSelectedBachelorCountryCodes();
+        const countryCode = countryCodes.join(",");
+        const payload = {
+          q: params.term || "",
+          country_code: countryCode,
+          page: params.page || 1,
+          size: 20,
+        };
+        console.log("[university search] request", payload);
+        return payload;
+      },
+      processResults: function (resp, params) {
+        console.log("[university search] response", resp);
+        const data = resp?.data || {};
+        const items = Array.isArray(data.items) ? data.items : [];
+        const results = items.map((item) => ({
+          id: item.id,
+          text: item.name_cn || item.name_en || item.name_en_short || item.id,
+        }));
+        const page = params.page || 1;
+        const total = Number(data.total || 0);
+        return {
+          results,
+          pagination: {
+            more: page * 20 < total,
+          },
+        };
+      },
+    },
   });
 
-  $("#select_bachelor_to_major").select2({
-    placeholder: "请选择目标专业（可多选）",
+  $bachelorMajor.select2({
+    placeholder: "????????????",
     allowClear: true,
+    dropdownParent: $(document.body),
+    minimumInputLength: 1,
+    ajax: {
+      delay: 300,
+      transport: function (params, success, failure) {
+        const schoolIds = $("#select_bachelor_to_school").val() || [];
+        if (!schoolIds.length) {
+          success({ data: { items: [], total: 0 } });
+          return;
+        }
+        const payload = params.data || {};
+        return $.ajax({
+          url: "/api/v1/programs/search",
+          method: "POST",
+          contentType: "application/json",
+          dataType: "json",
+          data: JSON.stringify(payload),
+        }).then(success).fail(failure);
+      },
+      url: function () {
+        return "/api/v1/programs/search";
+      },
+      dataType: "json",
+      data: function (params) {
+        const schoolIds = $("#select_bachelor_to_school").val() || [];
+        const payload = {
+          university_ids: schoolIds.map((id) => Number(id)),
+          degree_level: "bachelor",
+          q: params.term || "",
+          page: params.page || 1,
+          size: 20,
+        };
+        console.log("[program search] request", payload);
+        return payload;
+      },
+      processResults: function (resp, params) {
+        console.log("[program search] response", resp);
+        const data = resp?.data || {};
+        const items = Array.isArray(data.items) ? data.items : [];
+        const schoolMap = new Map();
+        const selectedSchoolData = $("#select_bachelor_to_school").select2("data") || [];
+        selectedSchoolData.forEach((item) => {
+          if (item && item.id != null) {
+            schoolMap.set(String(item.id), item.text || "");
+          }
+        });
+        const results = items.map((item) => ({
+          id: item.id,
+          text: `${item.major_name_cn || ""} - ${schoolMap.get(String(item.university_id)) || item.university_id || ""}`,
+        }));
+        const normalizedResults = results
+          .map((item) => ({
+            id: item.id != null ? String(item.id) : "",
+            text: item.text || ""
+          }))
+          .filter((item) => item.id !== "");
+        const page = params.page || 1;
+        const total = Number(data.total || 0);
+        return {
+          results: normalizedResults,
+          pagination: {
+            more: page * 20 < total,
+          },
+        };
+      },
+    },
   });
+
+  bindBachelorTargetCountryToggle();
+
   $("#select_master_to_school").select2({
     placeholder: "请选择目标院校（可多选）",
     allowClear: true,
@@ -144,7 +276,116 @@ $(function () {
   });
 });
 
-// A-Level：勾选时显示并启用四个下拉框，取消时隐藏并清空
+
+
+function getSelectedBachelorCountryCodes() {
+  const map = [
+    { id: "checkbox_bachelor_uk", code: "UK" },
+    { id: "checkbox_bachelor_australia", code: "AU" },
+    { id: "checkbox_bachelor_hongkong", code: "HK" },
+    { id: "checkbox_bachelor_singapore", code: "SG" },
+    { id: "checkbox_bachelor_usa", code: "US" },
+  ];
+  const codes = [];
+  map.forEach((item) => {
+    const el = document.getElementById(item.id);
+    if (el && el.checked) {
+      codes.push(item.code);
+    }
+  });
+  return codes;
+}
+
+function updateBachelorTargetInputs() {
+  const $bachelorSchool = $("#select_bachelor_to_school");
+  const $bachelorMajor = $("#select_bachelor_to_major");
+  const hasCountry = getSelectedBachelorCountryCodes().length > 0;
+  const hasSchoolSelected = ($bachelorSchool.val() || []).length > 0;
+  const hasMajorSelected = ($bachelorMajor.val() || []).length > 0;
+
+  setSelect2Disabled($bachelorSchool, !hasCountry);
+  setSelect2Disabled($bachelorMajor, !hasCountry || !hasSchoolSelected);
+
+  if (!hasCountry && (hasSchoolSelected || hasMajorSelected)) {
+    $bachelorSchool.val(null).trigger("change");
+    $bachelorMajor.val(null).trigger("change");
+  }
+
+}
+
+function setSelect2Disabled($el, disabled) {
+  $el.prop("disabled", disabled);
+  const instance = $el.data("select2");
+  if (instance && instance.options) {
+    try {
+      instance.options.set("disabled", disabled);
+    } catch (e) {
+      // Ignore if select2 version doesn't support options.set
+    }
+  }
+  $el.trigger("change.select2");
+}
+
+function bindBachelorTargetCountryToggle() {
+  [
+    "checkbox_bachelor_uk",
+    "checkbox_bachelor_australia",
+    "checkbox_bachelor_hongkong",
+    "checkbox_bachelor_singapore",
+    "checkbox_bachelor_usa",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("change", updateBachelorTargetInputs);
+    }
+  });
+
+  updateBachelorTargetInputs();
+}
+
+// Enable major only when schools are selected
+$(document).on("change", "#select_bachelor_to_school", function () {
+  updateBachelorTargetInputs();
+});
+
+// Store selected program IDs when majors change
+$(document).on("change", "#select_bachelor_to_major", function () {
+  const ids = ($(this).val() || []).map((v) => Number(v)).filter((v) => !Number.isNaN(v));
+  localStorage.setItem("dc_selected_program_ids", JSON.stringify(ids));
+  updateBachelorTargetInputs();
+});
+
+
+
+
+// Render master summary on confirm
+$(document).on("click", "#btn-modal-master-confirm", function () {
+  const data = collectMasterFormData();
+
+  // Replace select2 values with display text
+  data.target_schools = getSelect2Texts($("#select_master_to_school"));
+  data.target_majors = getSelect2Texts($("#select_master_to_major"));
+  data.graduated_school = getSelect2SingleText($("#select_master_graduated_school"));
+  data.graduated_major = getSelect2SingleText($("#select_master_graduated_major"));
+
+  renderMasterSummary(data);
+  showMasterCards();
+});
+
+
+// Render bachelor summary on confirm
+$(document).on("click", "#btn-modal-bachelor-confirm", function () {
+  const data = collectBachelorFormData();
+
+  // Replace select2 values with display text
+  data.target_schools = getSelect2Texts($("#select_bachelor_to_school"));
+  data.target_majors = getSelect2Texts($("#select_bachelor_to_major"));
+
+  renderBachelorSummary(data);
+  showBachelorCards();
+});
+
+// A-Level：勾选时显示并启用四个下拉框，取消时隐藏并清�?
 document
   .getElementById("checkbox_bachelor_alevel")
   .addEventListener("change", function () {
@@ -154,7 +395,7 @@ document
     const selects = container.querySelectorAll("select");
 
     if (this.checked) {
-      container.style.display = "flex"; // 显示为 flex，保持水平排列
+      container.style.display = "flex"; // 显示�?flex，保持水平排�?
       selects.forEach((sel) => (sel.disabled = false));
     } else {
       container.style.display = "none";
@@ -191,7 +432,7 @@ document
     }
   });
 
-// 雅思 IELTS
+// 雅�?IELTS
 document
   .getElementById("checkbox_bachelor_ielts")
   .addEventListener("change", function () {
@@ -248,7 +489,7 @@ document
     }
   });
 
-// 多邻国 Duolingo
+// 多邻�?Duolingo
 document
   .getElementById("checkbox_bachelor_duolingo")
   .addEventListener("change", function () {
@@ -308,7 +549,7 @@ document
 // ------------------ master start ------------------
 
 $(function () {
-  // 初始化多选下拉框（目标院校和目标专业）
+  // 初始化多选下拉框（目标院校和目标专业�?
   $("#select_master_to_school").select2({
     placeholder: "请选择目标院校（可多选）",
     allowClear: true,
@@ -320,7 +561,7 @@ $(function () {
   });
 });
 
-// 雅思 IELTS
+// 雅�?IELTS
 document
   .getElementById("checkbox_master_ielts")
   .addEventListener("change", function () {
@@ -377,7 +618,7 @@ document
     }
   });
 
-// 多邻国 Duolingo
+// 多邻�?Duolingo
 document
   .getElementById("checkbox_master_duolingo")
   .addEventListener("change", function () {
@@ -442,7 +683,7 @@ document
     }
   });
 
-// 国外专业不相关
+// 国外专业不相�?
 document
   .getElementById("checkbox_master_work_abroad_unrelated")
   .addEventListener("change", function () {
@@ -468,7 +709,7 @@ document
     }
   });
 
-// 国内专业不相关
+// 国内专业不相�?
 document
   .getElementById("checkbox_master_work_domestic_unrelated")
   .addEventListener("change", function () {
@@ -492,13 +733,13 @@ const PROGRAMS = [
     country: "英国",
     school: "UCL",
     major: "Computer Science BSc",
-    tier: "top", // top / strong / match / safe (你自己定义)
+    tier: "top", // top / strong / match / safe (你自己定�?
     requirements: {
-      gpaMin: 85, // 0-100 体系门槛（或后面你换成更细的）
+      gpaMin: 85, // 0-100 体系门槛（或后面你换成更细的�?
       ieltsOverallMin: 7.0,
       ieltsEachMin: 6.5,
       toeflTotalMin: 100,
-      alevelPreferred: ["A*", "A*", "A"], // 可选
+      alevelPreferred: ["A*", "A*", "A"], // 可�?
       apMinCount4: 3,
     },
     weights: {
@@ -526,86 +767,6 @@ const PROGRAMS = [
     tags: ["stem", "lab", "research_plus", "balanced"],
   },
 ];
-
-// ------------------ Get&Render Start ------- ModalInformation ------- Bachelor & Master------------------
-
-// 等待 DOM 加载完成
-document.addEventListener("DOMContentLoaded", function () {
-  // 初始隐藏所有（避免混合显示）
-  hideAllCards();
-  resetSummaryUI();
-
-  // initStudentRadarChart();
-
-
-  // 绑定 summary 重置按钮
-  const btnReset = document.getElementById("btn-summary-reset");
-  if (btnReset) {
-    btnReset.addEventListener("click", function () {
-      // 1) 清 summary
-      resetSummaryUI();
-      // 2) 隐藏所有卡片
-      hideAllCards();
-      // 3) 清两个 modal 表单
-      resetBachelorFormUI();
-      resetMasterFormUI();
-    });
-  }
-
-  document.querySelectorAll(".card-bachelor, .card-master").forEach((el) => {
-    el.style.display = "none";
-  });
-
-  const confirmBtnBachelorModal = document.getElementById(
-    "btn-modal-bachelor-confirm"
-  );
-
-  if (!confirmBtnBachelorModal) {
-    console.error("未找到确认按钮");
-    return;
-  }
-
-  confirmBtnBachelorModal.addEventListener("click", function () {
-    const dataBachelor = collectBachelorFormData();
-    console.log("本科申请数据:", dataBachelor);
-    renderBachelorSummary(dataBachelor);
-    showBachelorCards();
-
-    const { student, results } = matchBachelorPrograms(dataBachelor, PROGRAMS);
-
-    // updateStudentRadarChart(student);
-
-    console.log("学生画像：", student);
-    console.table(
-      results.slice(0, 20).map((r) => ({
-        country: r.country,
-        school: r.school,
-        major: r.major,
-        score: r.score,
-        penalty: r.explain.penalty,
-        bonus: r.explain.bonus,
-      }))
-    );
-  });
-
-  const confirmBtnMasterModal = document.getElementById(
-    "btn-modal-master-confirm"
-  );
-
-  if (!confirmBtnMasterModal) {
-    console.error("未找到确认按钮");
-    return;
-  }
-
-  confirmBtnMasterModal.addEventListener("click", function () {
-    const dataMaster = collectMasterFormData();
-    console.log("研究生申请数据:", dataMaster);
-    renderMasterSummary(dataMaster);
-    showMasterCards();
-  });
-});
-
-// ------------------ Get&Render End ------- ModalInformation ------- Bachelor & Master------------------
 
 // ------------------ GetModalInformation Start ------- Bachelor & Master------------------
 
@@ -635,14 +796,14 @@ function collectBachelorFormData() {
       ap: null,
     },
 
-    // 5. 活动及获奖
+    // 5. 活动及获�?
     activities: "",
     research: "",
     awards: "",
   };
 
   // ========================
-  // 1. 留学目标国家（多选 checkbox）
+  // 1. 留学目标国家（多�?checkbox�?
   // ========================
   const countries = [
     { id: "checkbox_bachelor_uk", value: "英国" },
@@ -664,7 +825,7 @@ function collectBachelorFormData() {
   // ========================
   const schoolSelect = $("#select_bachelor_to_school");
   if (schoolSelect.length) {
-    data.target_schools = schoolSelect.val() || []; // Select2 的 val() 返回数组
+    data.target_schools = schoolSelect.val() || []; // Select2 �?val() 返回数组
   }
 
   // ========================
@@ -702,7 +863,7 @@ function collectBachelorFormData() {
   // ========================
   // 5. 语言成绩
   // ========================
-  // 雅思
+  // 雅�?
   if (document.getElementById("checkbox_bachelor_ielts").checked) {
     data.language_scores.ielts = {
       overall:
@@ -768,7 +929,7 @@ function collectBachelorFormData() {
     };
   }
 
-  // 多邻国
+  // 多邻�?
   if (document.getElementById("checkbox_bachelor_duolingo").checked) {
     data.language_scores.duolingo =
       document.getElementById("input_bachelor_Duolingo_total")?.value.trim() ||
@@ -805,7 +966,7 @@ function collectBachelorFormData() {
   }
 
   // ========================
-  // 7. 活动及获奖
+  // 7. 活动及获�?
   // ========================
   if (document.getElementById("checkbox_bachelor_activity").checked) {
     data.activities =
@@ -846,12 +1007,12 @@ function collectMasterFormData() {
       duolingo: null,
     },
 
-    // 4. 活动及获奖 - 高质量
+    // 4. 活动及获�?- 高质�?
     activities: "",
     research: "",
     awards: "",
 
-    // 5. 工作经历 - 高质量
+    // 5. 工作经历 - 高质�?
     work_experience: {
       abroad_related: "",
       abroad_unrelated: "",
@@ -861,7 +1022,7 @@ function collectMasterFormData() {
   };
 
   // ========================
-  // 1. 留学目标国家（多选 checkbox）
+  // 1. 留学目标国家（多�?checkbox�?
   // ========================
   const countries = [
     { id: "checkbox_master_uk", value: "英国" },
@@ -894,7 +1055,7 @@ function collectMasterFormData() {
   // ========================
   // 3. 本科经历
   // ========================
-  // 类型（国内/国外本科）
+  // 类型（国�?国外本科�?
   const undergradRadios = document.querySelectorAll(
     'input[name="radio_undergraduate_domestic_or_abroad"]'
   );
@@ -913,13 +1074,13 @@ function collectMasterFormData() {
     data.undergraduate_gpa = gpaInput.value.trim();
   }
 
-  // 毕业院校（单选 Select2）
+  // 毕业院校（单�?Select2�?
   const schoolSelectGrad = $("#select_master_graduated_school");
   if (schoolSelectGrad.length) {
     data.graduated_school = schoolSelectGrad.val() || "";
   }
 
-  // 毕业专业（单选 Select2）
+  // 毕业专业（单�?Select2�?
   const majorSelectGrad = $("#select_master_graduated_major");
   if (majorSelectGrad.length) {
     data.graduated_major = majorSelectGrad.val() || "";
@@ -928,7 +1089,7 @@ function collectMasterFormData() {
   // ========================
   // 4. 语言成绩
   // ========================
-  // 雅思
+  // 雅�?
   if (document.getElementById("checkbox_master_ielts")?.checked) {
     data.language_scores.ielts = {
       overall:
@@ -972,14 +1133,14 @@ function collectMasterFormData() {
     };
   }
 
-  // 多邻国
+  // 多邻�?
   if (document.getElementById("checkbox_master_duolingo")?.checked) {
     data.language_scores.duolingo =
       document.getElementById("score_duolingo")?.value.trim() || "";
   }
 
   // ========================
-  // 5. 活动及获奖
+  // 5. 活动及获�?
   // ========================
   if (document.getElementById("checkbox_master_activity")?.checked) {
     data.activities =
@@ -1048,14 +1209,28 @@ function formatScore5(s) {
   const r = s.reading || "-";
   const w = s.writing || "-";
   const sp = s.speaking || "-";
-  // 保持你原来展示格式
+  // 保持你原来展示格�?
   return `${o} - ${l} - ${r} - ${w} - ${sp}`;
 }
 
 function formatAlevel(scores) {
   if (!Array.isArray(scores) || scores.length === 0) return "-";
-  // 你原来是多个 <a>，这里用空格分隔；想要 tag 也可以再升级
+  // 你原来是多个 <a>，这里用空格分隔；想�?tag 也可以再升级
   return scores.join(" ");
+}
+
+
+function getSelect2Texts($el) {
+  if (!$el || !$el.length) return [];
+  const data = $el.select2("data") || [];
+  return data
+    .map((item) => (item && item.text ? String(item.text).trim() : ""))
+    .filter((item) => item !== "");
+}
+
+function getSelect2SingleText($el) {
+  const items = getSelect2Texts($el);
+  return items.length ? items[0] : "";
 }
 
 // ---------- Renderers ----------
@@ -1070,7 +1245,7 @@ function renderBachelorSummary(data) {
   renderList("summary_master_target_schools", []);
   renderList("summary_master_target_majors", []);
 
-  // 中间：高中/国际课程/语言
+  // 中间：高�?国际课程/语言
   setText("summary_highschool_type", data.highschool_type, "-");
   setText("summary_highschool_gpa", data.highschool_gpa, "-");
 
@@ -1109,7 +1284,7 @@ function renderBachelorSummary(data) {
   );
   setText("summary_duolingo", data.language_scores?.duolingo, "-");
 
-  // 右侧：活动科研获奖（本科）
+  // 右侧：活动科研获奖（本科�?
   setNumberOrZero("summary_activities", data.activities);
   setNumberOrZero("summary_research", data.research);
   setNumberOrZero("summary_awards", data.awards);
@@ -1134,11 +1309,11 @@ function renderMasterSummary(data) {
   renderList("summary_master_target_schools", data.target_schools);
   renderList("summary_master_target_majors", data.target_majors);
 
-  // 清空本科目标区
+  // 清空本科目标�?
   renderList("summary_bachelor_target_schools", []);
   renderList("summary_bachelor_target_majors", []);
 
-  // 中间：大学经历
+  // 中间：大学经�?
   setText("summary_undergrad_type", data.undergraduate_type, "-");
   setText("summary_grad_school", data.graduated_school, "-");
   setText("summary_grad_major", data.graduated_major, "-");
@@ -1202,7 +1377,7 @@ function renderMasterSummary(data) {
 }
 
 function showBachelorCards() {
-  // 隐藏所有 master
+  // 隐藏所�?master
   document.querySelectorAll(".card-master").forEach((el) => {
     el.style.display = "none";
   });
@@ -1214,7 +1389,7 @@ function showBachelorCards() {
 }
 
 function showMasterCards() {
-  // 隐藏所有 bachelor
+  // 隐藏所�?bachelor
   document.querySelectorAll(".card-bachelor").forEach((el) => {
     el.style.display = "none";
   });
@@ -1348,7 +1523,7 @@ function resetSelects(prefix) {
   });
 }
 
-// Select2 清空（多选/单选通用）
+// Select2 清空（多�?单选通用�?
 function resetSelect2(selector) {
   const $el = $(selector);
   if ($el.length) {
@@ -1363,9 +1538,10 @@ function resetBachelorFormUI() {
   resetSelects("select_bachelor_");
   resetRadios("radio_highSchool_domestic_or_international");
 
-  // Select2（根据你 collect 里用到的）
+  // Select2（根据你 collect 里用到的�?
   resetSelect2("#select_bachelor_to_school");
   resetSelect2("#select_bachelor_to_major");
+  updateBachelorTargetInputs();
 }
 
 function resetMasterFormUI() {
@@ -1374,7 +1550,7 @@ function resetMasterFormUI() {
   resetSelects("select_master_");
   resetRadios("radio_undergraduate_domestic_or_abroad");
 
-  // Select2（根据你 collect 里用到的）
+  // Select2（根据你 collect 里用到的�?
   resetSelect2("#select_master_to_school");
   resetSelect2("#select_master_to_major");
   resetSelect2("#select_master_graduated_school");
@@ -1406,7 +1582,7 @@ function resetMasterFormUI() {
 
 //   const ctx = canvas.getContext("2d");
 
-//   // 如果 Chart.js 是全局脚本引入，模块里有时用 window.Chart 更稳
+//   // 如果 Chart.js 是全局脚本引入，模块里有时�?window.Chart 更稳
 //   const ChartCtor = window.Chart || Chart;
 
 //   studentRadarChart = new ChartCtor(ctx, {
@@ -1474,7 +1650,7 @@ function resetMasterFormUI() {
 //   const hint = document.getElementById("studentRadarHint");
 //   if (hint) {
 //     hint.textContent = missing.length
-//       ? `未填写/未提供：${missing.join("、")}（雷达图以 0 显示）`
+//       ? `未填�?未提供：${missing.join("�?)}（雷达图�?0 显示）`
 //       : "";
 //   }
 // }

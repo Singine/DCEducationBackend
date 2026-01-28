@@ -24,6 +24,177 @@
 // 14. closeCollapse js
 // 15. Modal js
 
+// >>-- Session guard (20 min idle logout) --<<
+const TOKEN_KEY = "dc_token";
+const USER_KEY = "dc_user";
+const LAST_ACTIVE_KEY = "dc_last_active";
+const IDLE_LIMIT_MS = 20 * 60 * 1000;
+
+function redirectToLogin() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  window.location.href = "./login.html";
+}
+
+function getLastActive() {
+  const v = localStorage.getItem(LAST_ACTIVE_KEY);
+  const n = parseInt(v || "0", 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function setLastActive(ts) {
+  localStorage.setItem(LAST_ACTIVE_KEY, String(ts));
+}
+
+function checkSession() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    redirectToLogin();
+    return;
+  }
+
+  const last = getLastActive();
+  if (last && Date.now() - last > IDLE_LIMIT_MS) {
+    redirectToLogin();
+  }
+}
+
+function updateUserUI(user) {
+  if (!user) return;
+  const name = user.username || user.email || "用户";
+  document.querySelectorAll(".js-user-name").forEach((el) => {
+    el.textContent = name;
+  });
+  if (user.email) {
+    document.querySelectorAll(".js-user-email").forEach((el) => {
+      el.textContent = user.email;
+    });
+  }
+}
+
+async function loadUserProfile() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return;
+
+  // Use cached user if present
+  try {
+    const cached = localStorage.getItem(USER_KEY);
+    if (cached) {
+      updateUserUI(JSON.parse(cached));
+    }
+  } catch (e) {
+    // ignore parse errors
+  }
+
+  try {
+    const resp = await fetch("/api/v1/auth/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        redirectToLogin();
+      }
+      return;
+    }
+    const payload = data?.data || data;
+    if (payload) {
+      updateUserUI(payload);
+    }
+  } catch (e) {
+    // ignore network errors
+  }
+}
+
+let idleTimer = null;
+function resetIdleTimer() {
+  setLastActive(Date.now());
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+  }
+  idleTimer = setTimeout(() => {
+    redirectToLogin();
+  }, IDLE_LIMIT_MS);
+}
+
+function bindSessionActivity() {
+  const events = ["click", "mousemove", "keydown", "scroll", "touchstart"];
+  events.forEach((evt) => {
+    document.addEventListener(evt, resetIdleTimer, { passive: true });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      checkSession();
+      resetIdleTimer();
+    }
+  });
+  window.addEventListener("storage", (e) => {
+    if (e.key === TOKEN_KEY && !e.newValue) {
+      redirectToLogin();
+    }
+  });
+}
+
+$(function () {
+  checkSession();
+  resetIdleTimer();
+  bindSessionActivity();
+  setInterval(checkSession, 60 * 1000);
+  loadUserProfile();
+});
+
+// >>-- Page fade transition --<<
+function initPageFade() {
+  document.body.classList.add("page-fade");
+  requestAnimationFrame(() => {
+    document.body.classList.add("page-loaded");
+  });
+}
+
+function shouldFadeLink($link) {
+  const href = ($link.attr("href") || "").trim();
+  if (!href || href === "#" || href.startsWith("#")) return false;
+  if (href.startsWith("javascript:")) return false;
+  if (href.startsWith("mailto:") || href.startsWith("tel:")) return false;
+  if ($link.attr("target") === "_blank") return false;
+  if ($link.attr("data-bs-toggle") || $link.attr("data-bs-target")) return false;
+
+  try {
+    const url = new URL(href, window.location.href);
+    return url.origin === window.location.origin;
+  } catch (e) {
+    return false;
+  }
+}
+
+$(function () {
+  initPageFade();
+
+  $(document).on("click", "a", function (e) {
+    const $link = $(this);
+    if (!shouldFadeLink($link)) return;
+    const href = $link.attr("href");
+    if (!href) return;
+
+    e.preventDefault();
+    document.body.classList.add("page-leave");
+    setTimeout(() => {
+      window.location.href = href;
+    }, 160);
+  });
+});
+
+// Logout link handler
+$(document).on("click", "a", function (e) {
+  if ($(this).find("i.ph-sign-out").length > 0) {
+    e.preventDefault();
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(LAST_ACTIVE_KEY);
+    window.location.href = "./login.html";
+  }
+});
+
 
 // >>-- 01 Horizontal Nav Js --<<
 let navBar = $(".main-nav");

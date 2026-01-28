@@ -124,6 +124,29 @@ curl -i "http://127.0.0.1:8080/api/v1/universities?page=1&size=20&q=california&c
 
 ---
 
+### 3.1.1 POST `/api/v1/universities/search`
+
+**Description**: Search universities by country code and keyword (POST).
+
+**Body (JSON)**:
+
+- `country_code` *(string, optional)*: AU / UK / SG / HK / CN / US ...
+- `q` *(string, optional)*: keyword
+- `page` *(int, optional, default 1)*
+- `size` *(int, optional, default 20)*
+
+**Response**: same as GET `/api/v1/universities`
+
+**curl**
+
+```bash
+curl -i -X POST "http://127.0.0.1:8080/api/v1/universities/search" \
+  -H "Content-Type: application/json" \
+  -d '{"country_code":"UK","q":"london","page":1,"size":20}'
+```
+
+---
+
 ### 3.2 GET `/api/v1/universities/:id`
 
 **描述**：按 ID 获取学校详情。
